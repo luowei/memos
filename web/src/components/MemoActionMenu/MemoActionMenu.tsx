@@ -9,6 +9,7 @@ import {
   LinkIcon,
   MoreVerticalIcon,
   TrashIcon,
+  UploadIcon,
 } from "lucide-react";
 import { useState } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -45,6 +46,7 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
     handleToggleMemoStatusClick,
     handleCopyLink,
     handleCopyContent,
+    handleSyncToGitHubRepo,
     handleDeleteMemoClick,
     confirmDeleteMemo,
   } = useMemoActionHandlers({
@@ -74,6 +76,12 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
               <Edit3Icon className="w-4 h-auto" />
               {t("common.edit")}
             </DropdownMenuItem>
+            {!isComment && (
+              <DropdownMenuItem onClick={handleSyncToGitHubRepo}>
+                <UploadIcon className="w-4 h-auto" />
+                {t("memo.sync-to-github-repo")}
+              </DropdownMenuItem>
+            )}
           </>
         )}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -23,6 +24,8 @@ const (
 	exportDescriptionSnippetLimit = 160
 )
 
+var trailingMemoTagsPattern = regexp.MustCompile(`(?m)(?:^|\n)(\s*(?:#[^\s#]+)(?:\s+#[^\s#]+)*\s*)$`)
+
 type jekyllFrontMatter struct {
 	Layout      string   `yaml:"layout"`
 	Title       string   `yaml:"title"`
@@ -30,8 +33,8 @@ type jekyllFrontMatter struct {
 	Description string   `yaml:"description"`
 	Categories  string   `yaml:"categories"`
 	Tags        []string `yaml:"tags"`
-	Visibility  string   `yaml:"visibility"`
-	Comments    bool     `yaml:"comments"`
+	Visibility  *string  `yaml:"visibility,omitempty"`
+	Comments    *bool    `yaml:"comments,omitempty"`
 }
 
 type exportMemosRequest struct {
@@ -127,10 +130,17 @@ func (s *APIV1Service) listExportableMemos(ctx context.Context, userID int32) ([
 func (s *APIV1Service) buildMemoExport(ctx context.Context, memo *store.Memo) (string, string, error) {
 	exportTime := s.getMemoDisplayTimeForExport(memo)
 	dateString := exportTime.Format("2006-01-02")
+	filenameDateString := exportTime.Format("20060102")
 
+	tags := []string{}
+	if memo.Payload != nil && len(memo.Payload.Tags) > 0 {
+		tags = append(tags, memo.Payload.Tags...)
+	}
+
+	exportContent := stripTrailingMemoTagsFromContent(memo.Content, tags)
 	title := extractMemoExportTitle(memo)
 	if title == "" {
-		snippet, err := s.getMemoContentSnippet(memo.Content)
+		snippet, err := s.getMemoContentSnippet(exportContent)
 		if err != nil {
 			return "", "", errors.Wrap(err, "failed to generate fallback title")
 		}
@@ -140,19 +150,23 @@ func (s *APIV1Service) buildMemoExport(ctx context.Context, memo *store.Memo) (s
 		title = "memo"
 	}
 
-	description, err := s.getMemoContentSnippetWithLimit(memo.Content, exportDescriptionSnippetLimit)
+	description, err := s.getMemoContentSnippetWithLimit(exportContent, exportDescriptionSnippetLimit)
 	if err != nil {
 		return "", "", errors.Wrap(err, "failed to generate description")
-	}
-
-	tags := []string{}
-	if memo.Payload != nil && len(memo.Payload.Tags) > 0 {
-		tags = append(tags, memo.Payload.Tags...)
 	}
 
 	category := ""
 	if len(tags) > 0 {
 		category = tags[0]
+	}
+
+	var visibility *string
+	var comments *bool
+	if !isMemoPublicForExport(memo) {
+		privateValue := "private"
+		falseValue := false
+		visibility = &privateValue
+		comments = &falseValue
 	}
 
 	frontMatterBytes, err := yaml.Marshal(jekyllFrontMatter{
@@ -162,29 +176,33 @@ func (s *APIV1Service) buildMemoExport(ctx context.Context, memo *store.Memo) (s
 		Description: description,
 		Categories:  category,
 		Tags:        tags,
-		Visibility:  "private",
-		Comments:    false,
+		Visibility:  visibility,
+		Comments:    comments,
 	})
 	if err != nil {
 		return "", "", errors.Wrap(err, "failed to marshal front matter")
 	}
 
-	filenameTitle := normalizeForPathComponent(title)
+	filenameTitle := normalizeForFilenameSlug(title)
 	if filenameTitle == "" {
 		filenameTitle = "memo"
 	}
-	filename := fmt.Sprintf("%s-%s-%s.md", dateString, filenameTitle, memo.UID)
+	filename := fmt.Sprintf("%s-%s-%s.md", filenameDateString, filenameTitle, memo.UID)
 
 	var builder strings.Builder
 	builder.WriteString("---\n")
 	builder.Write(frontMatterBytes)
 	builder.WriteString("---\n\n")
-	builder.WriteString(memo.Content)
-	if memo.Content == "" || !strings.HasSuffix(memo.Content, "\n") {
+	builder.WriteString(exportContent)
+	if exportContent == "" || !strings.HasSuffix(exportContent, "\n") {
 		builder.WriteString("\n")
 	}
 
 	return filename, builder.String(), nil
+}
+
+func isMemoPublicForExport(memo *store.Memo) bool {
+	return memo != nil && memo.Visibility == store.Public
 }
 
 func (s *APIV1Service) getMemoDisplayTimeForExport(memo *store.Memo) time.Time {
@@ -236,32 +254,75 @@ func buildNormalizedTitle(content string, limit int) string {
 	return strings.TrimSpace(strings.Join(strings.Fields(builder.String()), " "))
 }
 
-func normalizeForPathComponent(value string) string {
+func normalizeForFilenameSlug(value string) string {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" {
 		return ""
 	}
 
 	var builder strings.Builder
-	lastWasDash := false
+	lastWasSeparator := false
 	for _, r := range value {
 		switch {
 		case unicode.IsLetter(r) || unicode.IsNumber(r):
 			builder.WriteRune(r)
-			lastWasDash = false
+			lastWasSeparator = false
 		case unicode.IsSpace(r) || r == '-' || r == '_':
-			if !lastWasDash && builder.Len() > 0 {
-				builder.WriteRune('-')
-				lastWasDash = true
+			if !lastWasSeparator && builder.Len() > 0 {
+				builder.WriteRune('_')
+				lastWasSeparator = true
 			}
 		}
 	}
 
-	result := strings.Trim(builder.String(), "-")
+	result := strings.Trim(builder.String(), "_")
 	if result == "" || !utf8.ValidString(result) {
 		return ""
 	}
 	return result
+}
+
+func stripTrailingMemoTagsFromContent(content string, tags []string) string {
+	content = strings.TrimRight(content, "\n")
+	if content == "" || len(tags) == 0 {
+		return content
+	}
+
+	tagSet := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		normalized := strings.TrimSpace(tag)
+		if normalized == "" {
+			continue
+		}
+		tagSet["#"+normalized] = struct{}{}
+	}
+	if len(tagSet) == 0 {
+		return content
+	}
+
+	matches := trailingMemoTagsPattern.FindAllStringSubmatchIndex(content, -1)
+	if len(matches) == 0 {
+		return content
+	}
+
+	last := matches[len(matches)-1]
+	if len(last) < 4 {
+		return content
+	}
+
+	segmentStart, segmentEnd := last[2], last[3]
+	segment := strings.TrimSpace(content[segmentStart:segmentEnd])
+	if segment == "" {
+		return content
+	}
+
+	for _, token := range strings.Fields(segment) {
+		if _, ok := tagSet[token]; !ok {
+			return content
+		}
+	}
+
+	return strings.TrimRight(strings.TrimSpace(content[:segmentStart]), "\n")
 }
 
 func (s *APIV1Service) resolveMemoExportDirectory(outputDirectory string) (string, error) {

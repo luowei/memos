@@ -13,6 +13,7 @@ export interface UseMemoActionHandlersReturn {
   handleToggleMemoStatusClick: () => Promise<void>;
   handleCopyLink: () => void;
   handleCopyContent: () => void;
+  handleSyncToGitHubRepo: () => Promise<void>;
   handleDeleteMemoClick: () => void;
   confirmDeleteMemo: () => Promise<void>;
   handleRemoveCompletedTaskListItemsClick: () => void;

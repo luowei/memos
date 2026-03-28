@@ -3,7 +3,10 @@ import copy from "copy-to-clipboard";
 import { useCallback } from "react";
 import toast from "react-hot-toast";
 import { useLocation } from "react-router-dom";
+import { getAccessToken, hasStoredToken, isTokenExpired } from "@/auth-state";
+import { refreshAccessToken } from "@/connect";
 import { useInstance } from "@/contexts/InstanceContext";
+import { memoExportMetadataKeys } from "@/hooks/useMemoExportMetadata";
 import { memoKeys, useDeleteMemo, useUpdateMemo } from "@/hooks/useMemoQueries";
 import useNavigateTo from "@/hooks/useNavigateTo";
 import { userKeys } from "@/hooks/useUserQueries";
@@ -93,6 +96,38 @@ export const useMemoActionHandlers = ({ memo, onEdit, setDeleteDialogOpen }: Use
     toast.success(t("message.succeed-copy-content"));
   }, [memo.content, t]);
 
+  const handleSyncToGitHubRepo = useCallback(async () => {
+    try {
+      let accessToken = getAccessToken();
+      if ((!accessToken || isTokenExpired()) && hasStoredToken()) {
+        await refreshAccessToken();
+        accessToken = getAccessToken();
+      }
+
+      const memoUID = memo.name.replace(/^memos\//, "");
+      const response = await fetch(`/api/v1/memos/${encodeURIComponent(memoUID)}/sync-to-github`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+      if (!response.ok) {
+        const error = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(error?.message || `GitHub sync failed with status ${response.status}`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: memoExportMetadataKeys.detail(memo.name) });
+      toast.success(t("message.memo-synced-to-github"));
+    } catch (error: unknown) {
+      handleError(error, toast.error, {
+        context: "Sync memo to GitHub repo",
+        fallbackMessage: "An error occurred",
+      });
+    }
+  }, [memo.name, queryClient, t]);
+
   const handleDeleteMemoClick = useCallback(() => {
     setDeleteDialogOpen(true);
   }, [setDeleteDialogOpen]);
@@ -120,6 +155,7 @@ export const useMemoActionHandlers = ({ memo, onEdit, setDeleteDialogOpen }: Use
     handleToggleMemoStatusClick,
     handleCopyLink,
     handleCopyContent,
+    handleSyncToGitHubRepo,
     handleDeleteMemoClick,
     confirmDeleteMemo,
   };

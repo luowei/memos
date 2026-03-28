@@ -1,11 +1,12 @@
-# Memo 导出与兰空附件同步功能实现与升级指南
+# Memo 导出、GitHub 同步与兰空附件同步功能实现与升级指南
 
 本文档记录当前仓库中两个增强功能的实现细节、数据流、改动位置、升级兼容注意事项与回归验证方法，供后续主仓库升级或重大重构后快速恢复兼容使用。
 
 适用功能：
 
 1. Memo 导出 Markdown 到指定目录
-2. 扫描 Memo 附件并同步到兰空图床（Lsky）
+2. 单篇 Memo 导出并同步到 GitHub 仓库
+3. 扫描 Memo 附件并同步到兰空图床（Lsky）
 
 关联文档：
 
@@ -44,6 +45,20 @@
 
 - `POST /api/v1/memos/sync-attachments-to-lsky`
 
+### 1.3 单篇 Memo 同步到 GitHub Repo
+
+目标：
+
+- 在单篇 memo 的右上角更多菜单中提供“同步到 GitHub Repo”
+- 将该 memo 导出为与设置页导出一致的 Jekyll Markdown
+- 根据 memo 可见性决定同步目录
+- 若仓库内已有同一 memo 对应文件则更新
+- 同步成功后更新该 memo 的导出时间
+
+当前接口：
+
+- `POST /api/v1/memos/:memo/sync-to-github`
+
 ## 2. 关键实现文件
 
 ### 2.1 后端
@@ -52,6 +67,8 @@
   - Memo 导出核心逻辑
 - `server/router/api/v1/memo_service_lsky_sync.go`
   - 附件扫描、PDF 转图、Lsky 上传、回写 memo 内容
+- `server/router/api/v1/memo_service_github_sync.go`
+  - 单篇 memo 导出并同步到 GitHub Repo
 - `server/router/api/v1/memo_export_metadata_service.go`
   - 查询单条 memo 的导出元数据
 - `server/router/api/v1/memo_export_metadata_helper.go`
@@ -83,6 +100,10 @@
 
 - `web/src/components/Settings/PreferencesSection.tsx`
   - 设置页入口
+- `web/src/components/MemoActionMenu/MemoActionMenu.tsx`
+  - 单篇 memo 更多菜单入口
+- `web/src/components/MemoActionMenu/hooks.ts`
+  - 单篇 memo GitHub 同步前端行为
 - `web/src/hooks/useMemoExportMetadata.ts`
   - 读取导出时间元数据
 - `web/src/components/MemoView/components/MemoHeader.tsx`
@@ -93,6 +114,7 @@
 ### 2.5 测试
 
 - `server/router/api/v1/memo_service_export_test.go`
+- `server/router/api/v1/memo_service_github_sync_test.go`
 - `server/router/api/v1/memo_service_lsky_sync_test.go`
 
 ## 3. Memo 导出功能说明
@@ -116,17 +138,20 @@
 格式：
 
 ```text
-yyyy-mm-dd-<normalized-title>-<memo-uid>.md
+YYYYMMDD-<slug_with_underscores>-<memo-uid>.md
 ```
 
 规则：
 
 - 日期来自 memo 展示时间
+- 文件名日期格式为 `YYYYMMDD`
 - 优先使用 H1 标题作为 title
 - 若无 title，则取 content snippet 的前 16 个规格化字符
 - 若规格化后为空，则回退为 `memo`
+- slug 内部单词连接使用 `_`
+- slug 内部不再使用 `-`
 
-### 3.3 文件内容格式
+### 3.3 文件内容格式与可见性规则
 
 导出内容使用 Jekyll front matter：
 
@@ -145,6 +170,23 @@ comments: false
 
 <memo content>
 ```
+
+重要约束：
+
+- 导出语义只有两种：`public` 与 `private`
+- 这里的 `private` 是逻辑概念，表示“所有非 `PUBLIC` memo”
+- 不会在导出的 Markdown 中写入 `visibility: protected`
+- 只有当 memo `Visibility != PUBLIC` 时，才写入：
+  - `visibility: private`
+  - `comments: false`
+- 当 memo `Visibility == PUBLIC` 时：
+  - 不写 `visibility`
+  - 不写 `comments`
+
+换句话说：
+
+- `PUBLIC` -> front matter 不带私有标记
+- 所有非 `PUBLIC` -> front matter 统一写成 `private`
 
 ### 3.4 路由与请求
 
@@ -165,6 +207,8 @@ comments: false
 - 相对路径会基于 `Profile.Data` 解析
 - 为防止越界，相对路径必须仍位于数据目录内
 - 绝对路径允许直接使用
+- 导出正文会自动剥离 memo 尾部仅由 tag 组成的 `#tag` 行，避免在 Markdown 中被误判为标题
+- 设置页批量导出与 GitHub 单篇同步共用同一套 `buildMemoExport()` 逻辑，必须保持行为一致
 
 ### 3.5 导出时间元数据
 
@@ -243,6 +287,7 @@ comments: false
 当前已接入同步的入口：
 
 - 标准 `UpdateMemo`
+- GitHub 同步成功后的导出时间更新
 - Lsky 同步回写 memo 内容
 
 如果后续新增其他“直接修改 memo 内容”的入口，也必须记得调用：
@@ -324,7 +369,120 @@ comments: false
 
 若 memo 正文已包含该标记，当前逻辑会认为已同步过，不再重复追加。
 
-## 6. 前端设置页实现说明
+## 6. 单篇 Memo 同步到 GitHub Repo 功能说明
+
+### 6.1 前端入口
+
+入口位于：
+
+- `web/src/components/MemoActionMenu/MemoActionMenu.tsx`
+
+菜单项：
+
+- `同步到 GitHub Repo`
+
+仅对非 comment memo 显示。
+
+### 6.2 路由
+
+- `POST /api/v1/memos/:memo/sync-to-github`
+
+不需要请求体，服务端根据 memo 本身生成导出内容。
+
+### 6.3 导出规则
+
+此功能复用 `buildMemoExport()`，因此与设置页导出的规则完全一致：
+
+- 文件名规则一致
+- front matter 规则一致
+- content 尾部 `#tag` 清洗规则一致
+- 成功后同样更新 `memo_export.export_ts`
+
+额外说明：
+
+- 导出文件名统一为：
+
+```text
+YYYYMMDD-<slug_with_underscores>-<memo-uid>.md
+```
+
+- `YYYYMMDD` 内部不包含 `-`
+- slug 内部单词连接使用 `_`
+- 外层三段仍使用 `-` 分隔
+- 若 memo title 变化导致 slug 变化，GitHub 同步时必须迁移到新文件名
+
+### 6.4 GitHub 仓库与目录映射
+
+默认目标仓库：
+
+- `luowei/luowei_github_io_src`
+
+默认目标分支：
+
+- `master`
+
+目录规则：
+
+- `PUBLIC` memo -> `_posts`
+- 所有非 `PUBLIC` memo -> `_posts_private`
+
+### 6.5 环境变量
+
+当前实现使用服务端环境变量：
+
+- `MEMOS_GITHUB_SYNC_TOKEN`
+  - 必填，GitHub token
+- `MEMOS_GITHUB_SYNC_REPO_OWNER`
+  - 可选，默认 `luowei`
+- `MEMOS_GITHUB_SYNC_REPO_NAME`
+  - 可选，默认 `luowei_github_io_src`
+- `MEMOS_GITHUB_SYNC_BRANCH`
+  - 可选，默认 `master`
+- `MEMOS_GITHUB_SYNC_API_BASE_URL`
+  - 可选，默认 `https://api.github.com`
+  - 主要用于测试或自建 GitHub 兼容服务
+
+### 6.6 仓库文件更新策略
+
+服务端会先同时列出 `_posts` 与 `_posts_private` 中的候选文件，再用 memo UID 查找已存在文件：
+
+- 若不存在：创建新文件
+- 若存在且文件名一致：直接更新
+- 若存在但文件名已变更：
+  - 先创建/更新新文件
+  - 再删除旧文件
+
+这样可以兼容：
+
+- title 变化
+- date 变化
+- 文件名规格化变化
+- 可见性变化导致的目录迁移
+
+必须保持的规则：
+
+- `PUBLIC` -> `_posts`
+- 所有非 `PUBLIC` -> `_posts_private`
+- `PUBLIC -> 非 PUBLIC`
+  - 文件从 `_posts` 移到 `_posts_private`
+  - front matter 增加 `visibility: private` 与 `comments: false`
+- `非 PUBLIC -> PUBLIC`
+  - 文件从 `_posts_private` 移到 `_posts`
+  - front matter 移除 `visibility: private` 与 `comments: false`
+- title 改名后：
+  - 同一个 `memo_id` 对应的旧文件要被识别出来
+  - 新 slug 文件应覆盖成为最新文件名
+  - 旧文件应被删除
+
+### 6.7 权限
+
+当前要求：
+
+- 必须登录
+- 必须是 memo 创建者或管理员
+- comment memo 不支持同步
+
+## 7. 前端设置页实现说明
 
 文件：
 
@@ -361,7 +519,7 @@ comments: false
 1. 两个动作使用不同 handler
 2. 两个按钮都不要依赖表单 submit 默认行为
 
-## 7. 与主仓库升级兼容时的重点检查项
+## 8. 与主仓库升级兼容时的重点检查项
 
 后续如果上游主仓库做了较大改动，优先检查以下内容：
 
@@ -370,6 +528,7 @@ comments: false
 - `server/router/api/v1/v1.go` 是否还允许注册自定义 HTTP 路由
 - Echo / Gateway 初始化方式是否改变
 - 自定义接口是否被新的统一路由封装替代
+- `sync-to-github` 路由是否仍能安全注册
 
 ### 7.2 Memo 模型
 
@@ -388,6 +547,11 @@ comments: false
 - 设置页组件路径是否变化
 - 自定义 fetch 是否应迁移到统一 hooks / connect client
 
+还要额外检查：
+
+- `MemoActionMenu` 是否被改写
+- memo 右上角 dropdown menu 的结构是否变动
+
 ### 7.4 路由层
 
 如果上游转回严格 proto 驱动：
@@ -401,6 +565,38 @@ comments: false
 
 - 新 migration 文件
 - 三套 `LATEST.sql`
+
+### 7.6 导出语义
+
+升级后必须再次确认以下约束没有被破坏：
+
+- 导出逻辑只处理两态：
+  - `PUBLIC`
+  - 非 `PUBLIC`，统一按 `private` 导出
+- 不要把 `PROTECTED` 或其他将来可能出现的非公开枚举值写进 Markdown front matter
+- GitHub 目录选择也必须沿用同一套两态逻辑，而不是按每个具体可见性枚举分支处理
+
+### 7.7 回归测试建议
+
+每次升级后至少回归以下场景：
+
+1. 设置页批量导出 `PUBLIC` memo
+   - md 中不含 `visibility: private`
+   - md 中不含 `comments: false`
+2. 设置页批量导出非 `PUBLIC` memo
+   - md 中包含 `visibility: private`
+   - md 中包含 `comments: false`
+3. GitHub 同步时修改 memo title
+   - 同一 `memo_id` 的文件 slug 会更新
+   - 旧文件被删除
+4. GitHub 同步时 `PUBLIC -> 非 PUBLIC`
+   - 文件从 `_posts` 迁移到 `_posts_private`
+   - md 中新增私有 front matter
+5. GitHub 同步时 `非 PUBLIC -> PUBLIC`
+   - 文件从 `_posts_private` 迁移到 `_posts`
+   - md 中移除私有 front matter
+6. memo 正文末尾含 `#tag` 标签行
+   - 导出结果中尾部标签行被清洗，不会误判为 Markdown 标题
 - 三套 driver 实现
 - `store/driver.go` 接口
 
@@ -409,20 +605,22 @@ comments: false
 - 新库可启动但旧库升级失败
 - 某一种数据库驱动编译失败
 
-## 8. 如果需要重新移植这两个功能，建议顺序
+## 9. 如果需要重新移植这三个功能，建议顺序
 
 1. 先移植 `memo_export` 表与 store 层
 2. 再恢复 Memo 导出接口与测试
 3. 再恢复导出时间前端展示
-4. 再恢复 Lsky 同步接口
-5. 最后恢复设置页入口与文案
+4. 再恢复单篇 GitHub 同步接口与菜单入口
+5. 再恢复 Lsky 同步接口
+6. 最后恢复设置页入口与文案
 
 原因：
 
 - Memo 导出依赖更少，适合作为第一阶段恢复
+- GitHub 同步复用导出规则，适合在导出功能恢复后第二阶段补回
 - Lsky 同步依赖附件、文件读取、PDF 转换与外部 API，复杂度更高
 
-## 9. 回归验证清单
+## 10. 回归验证清单
 
 ### 9.1 Memo 导出
 
@@ -440,7 +638,17 @@ comments: false
 4. 确认 `memo_export.updated_ts` 同步变化
 5. 确认 `memo_export.export_ts` 不因普通编辑而变化
 
-### 9.3 兰空附件同步
+### 9.3 GitHub 同步
+
+1. 配置 `MEMOS_GITHUB_SYNC_TOKEN`
+2. 打开单篇 memo 的更多菜单
+3. 点击“同步到 GitHub Repo”
+4. 确认仓库内目标目录生成或更新对应文件
+5. 确认文件内容与设置页导出的 Markdown 一致
+6. 确认同步成功后 `memo_export.export_ts` 更新
+7. 若 memo title 或 date 发生变化，再次同步应能迁移文件名
+
+### 9.4 兰空附件同步
 
 1. 使用真实 token
 2. 扫描结果应优先显示有附件的 memo
@@ -449,7 +657,7 @@ comments: false
 5. ZIP 等附件应显示 skipped
 6. 再次执行不应重复追加同一批链接
 
-## 10. 当前已知局限
+## 11. 当前已知局限
 
 1. 自定义接口未进入 proto / Connect 正式定义
    - 原因是当前环境缺少 `buf`
@@ -467,11 +675,15 @@ comments: false
 4. Lsky 同步只处理 attachment 记录
    - memo 正文里本来就有的外链图片不算附件
 
-## 11. 推荐后续优化
+5. GitHub 同步当前依赖服务端环境变量 token
+   - 没做 UI 配置
+   - 没接入更细粒度的多仓库配置
+
+## 12. 推荐后续优化
 
 1. 将导出接口和导出元数据接口收编到 proto
 2. 将 `export_ts` / `export_updated_ts` 正式并入 Memo API 输出
 3. 为 Lsky 同步增加 dry-run 模式
 4. 为 Lsky 同步增加“仅处理最近 N 天修改的 memo”
 5. 为导出内容增加可配置 front matter 模板
-
+6. 为 GitHub 同步增加仓库、分支、目录映射的设置化配置

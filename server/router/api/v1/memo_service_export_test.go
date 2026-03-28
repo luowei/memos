@@ -91,13 +91,13 @@ func TestExportMemos(t *testing.T) {
 	require.Len(t, entries, 2)
 
 	firstUID := strings.TrimPrefix(firstMemo.Name, "memos/")
-	firstFilename := filepath.Join(expectedDir, "2026-03-27-hello-world-"+firstUID+".md")
+	firstFilename := filepath.Join(expectedDir, "20260327-hello_world-"+firstUID+".md")
 	firstContent, err := os.ReadFile(firstFilename)
 	require.NoError(t, err)
 	require.Contains(t, string(firstContent), "layout: post\n")
 	require.Contains(t, string(firstContent), "title: Hello World\n")
 	require.Contains(t, string(firstContent), "date: \"2026-03-27\"\n")
-	require.Contains(t, string(firstContent), "description: 'Hello World This memo is ready for export. #jekyll #golang'\n")
+	require.Contains(t, string(firstContent), "description: Hello World This memo is ready for export.\n")
 	require.Contains(t, string(firstContent), "categories: jekyll\n")
 	require.Contains(t, string(firstContent), "- jekyll\n")
 	require.Contains(t, string(firstContent), "- golang\n")
@@ -106,12 +106,60 @@ func TestExportMemos(t *testing.T) {
 	require.Contains(t, string(firstContent), "\n# Hello World\n\nThis memo is ready for export.")
 
 	secondUID := strings.TrimPrefix(secondMemo.Name, "memos/")
-	secondFilename := filepath.Join(expectedDir, "2026-03-28-second-memo-for-"+secondUID+".md")
+	secondFilename := filepath.Join(expectedDir, "20260328-second_memo_for-"+secondUID+".md")
 	secondContent, err := os.ReadFile(secondFilename)
 	require.NoError(t, err)
 	require.Contains(t, string(secondContent), "title: second memo for\n")
 	require.Contains(t, string(secondContent), "categories: daily\n")
 	require.Contains(t, string(secondContent), "- daily\n")
+	require.Contains(t, string(secondContent), "visibility: private\n")
+	require.Contains(t, string(secondContent), "comments: false\n")
+
+	publicCreateTime := time.Date(2026, 3, 29, 7, 45, 0, 0, time.UTC)
+	publicMemo, err := service.CreateMemo(userCtx, &apiv1.CreateMemoRequest{
+		Memo: &apiv1.Memo{
+			Content:    "# Public Memo\n\nThis memo should stay public.\n\n#public",
+			Visibility: apiv1.Visibility_PUBLIC,
+			CreateTime: timestamppb.New(publicCreateTime),
+		},
+	})
+	require.NoError(t, err)
+
+	response, err = service.exportMemos(userCtx, &exportMemosRequest{
+		OutputDirectory: "exports/posts",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(3), response.ExportedCount)
+
+	publicUID := strings.TrimPrefix(publicMemo.Name, "memos/")
+	publicFilename := filepath.Join(expectedDir, "20260329-public_memo-"+publicUID+".md")
+	publicContent, err := os.ReadFile(publicFilename)
+	require.NoError(t, err)
+	require.NotContains(t, string(publicContent), "visibility: private\n")
+	require.NotContains(t, string(publicContent), "comments: false\n")
+
+	protectedCreateTime := time.Date(2026, 3, 30, 6, 20, 0, 0, time.UTC)
+	protectedMemo, err := service.CreateMemo(userCtx, &apiv1.CreateMemoRequest{
+		Memo: &apiv1.Memo{
+			Content:    "# Protected Memo\n\nThis memo should export as non-public.\n\n#team",
+			Visibility: apiv1.Visibility_PROTECTED,
+			CreateTime: timestamppb.New(protectedCreateTime),
+		},
+	})
+	require.NoError(t, err)
+
+	response, err = service.exportMemos(userCtx, &exportMemosRequest{
+		OutputDirectory: "exports/posts",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(4), response.ExportedCount)
+
+	protectedUID := strings.TrimPrefix(protectedMemo.Name, "memos/")
+	protectedFilename := filepath.Join(expectedDir, "20260330-protected_memo-"+protectedUID+".md")
+	protectedContent, err := os.ReadFile(protectedFilename)
+	require.NoError(t, err)
+	require.Contains(t, string(protectedContent), "visibility: private\n")
+	require.Contains(t, string(protectedContent), "comments: false\n")
 
 	firstMetadata, err := service.getMemoExportMetadata(userCtx, firstMemo.Name)
 	require.NoError(t, err)
@@ -135,7 +183,7 @@ func TestExportMemos(t *testing.T) {
 
 	exports, err := testStore.ListMemoExports(userCtx, &store.FindMemoExport{})
 	require.NoError(t, err)
-	require.Len(t, exports, 2)
+	require.Len(t, exports, 4)
 
 	firstMemoUID := strings.TrimPrefix(firstMemo.Name, "memos/")
 	firstStoreMemo, err := testStore.GetMemo(userCtx, &store.FindMemo{UID: &firstMemoUID})
@@ -151,4 +199,13 @@ func TestExportMemos(t *testing.T) {
 	}
 	require.NotNil(t, updatedExport)
 	require.Equal(t, updatedMemoTime.Unix(), updatedExport.UpdatedTs)
+}
+
+func TestStripTrailingMemoTagsFromContent(t *testing.T) {
+	content := "# Title\n\nBody paragraph.\n\n#tag1 #tag2\n"
+	stripped := stripTrailingMemoTagsFromContent(content, []string{"tag1", "tag2"})
+	require.Equal(t, "# Title\n\nBody paragraph.", stripped)
+
+	unchanged := stripTrailingMemoTagsFromContent("# Title\n\n# Actual Heading", []string{"tag1", "tag2"})
+	require.Equal(t, "# Title\n\n# Actual Heading", unchanged)
 }
