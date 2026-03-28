@@ -6,17 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/pkg/errors"
-	"github.com/usememos/memos/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
+
+	"github.com/usememos/memos/store"
 )
 
 const (
@@ -114,20 +115,23 @@ func (s *APIV1Service) listExportableMemos(ctx context.Context, userID int32) ([
 		return nil, errors.Wrap(err, "failed to list archived memos")
 	}
 
-	memos := append(normalMemos, archivedMemos...)
-	sort.Slice(memos, func(i, j int) bool {
-		left := s.getMemoDisplayTimeForExport(memos[i])
-		right := s.getMemoDisplayTimeForExport(memos[j])
+	memos := append(append([]*store.Memo{}, normalMemos...), archivedMemos...)
+	slices.SortFunc(memos, func(leftMemo, rightMemo *store.Memo) int {
+		left := s.getMemoDisplayTimeForExport(leftMemo)
+		right := s.getMemoDisplayTimeForExport(rightMemo)
 		if left.Equal(right) {
-			return memos[i].UID < memos[j].UID
+			return strings.Compare(leftMemo.UID, rightMemo.UID)
 		}
-		return left.Before(right)
+		if left.Before(right) {
+			return -1
+		}
+		return 1
 	})
 
 	return memos, nil
 }
 
-func (s *APIV1Service) buildMemoExport(ctx context.Context, memo *store.Memo) (string, string, error) {
+func (s *APIV1Service) buildMemoExport(_ context.Context, memo *store.Memo) (string, string, error) {
 	exportTime := s.getMemoDisplayTimeForExport(memo)
 	dateString := exportTime.Format("2006-01-02")
 	filenameDateString := exportTime.Format("20060102")
@@ -272,6 +276,8 @@ func normalizeForFilenameSlug(value string) string {
 				builder.WriteRune('_')
 				lastWasSeparator = true
 			}
+		default:
+			// Skip unsupported characters when generating the filename slug.
 		}
 	}
 

@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -169,18 +169,22 @@ func (s *APIV1Service) syncMemoAttachmentsToLsky(ctx context.Context, request *s
 		response.Results = append(response.Results, result)
 	}
 
-	sort.SliceStable(response.Results, func(i, j int) bool {
-		left := response.Results[i]
-		right := response.Results[j]
+	slices.SortStableFunc(response.Results, func(left, right *memoLskySyncResult) int {
 		leftPriority := memoLskySyncResultPriority(left)
 		rightPriority := memoLskySyncResultPriority(right)
 		if leftPriority != rightPriority {
-			return leftPriority < rightPriority
+			if leftPriority < rightPriority {
+				return -1
+			}
+			return 1
 		}
 		if left.AttachmentCount != right.AttachmentCount {
-			return left.AttachmentCount > right.AttachmentCount
+			if left.AttachmentCount > right.AttachmentCount {
+				return -1
+			}
+			return 1
 		}
-		return left.MemoName < right.MemoName
+		return strings.Compare(left.MemoName, right.MemoName)
 	})
 
 	return response, nil
@@ -314,7 +318,7 @@ func (s *APIV1Service) appendLskyLinksToMemo(ctx context.Context, memo *store.Me
 	return nil
 }
 
-func (s *APIV1Service) uploadImageToLsky(ctx context.Context, baseURL, token, strategyID, filename string, blob []byte) (string, error) {
+func (_ *APIV1Service) uploadImageToLsky(ctx context.Context, baseURL, token, strategyID, filename string, blob []byte) (string, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 

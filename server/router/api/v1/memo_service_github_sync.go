@@ -177,10 +177,6 @@ func (s *APIV1Service) syncMemoToGitHub(ctx context.Context, memoName string) (*
 	}, nil
 }
 
-func getGitHubSyncConfig() (*gitHubSyncConfig, error) {
-	return getGitHubSyncConfigFromEnv()
-}
-
 func loadGitHubSyncConfig(ctx context.Context, service *APIV1Service) (*gitHubSyncConfig, string, error) {
 	stored, err := readStoredGitHubSyncSetting(ctx, service)
 	if err != nil {
@@ -197,10 +193,10 @@ func loadGitHubSyncConfig(ctx context.Context, service *APIV1Service) (*gitHubSy
 	}
 
 	config, err := getGitHubSyncConfigFromEnv()
-	if err != nil {
-		return nil, "", nil
+	if err == nil {
+		return config, "env", nil
 	}
-	return config, "env", nil
+	return nil, "", nil
 }
 
 func getGitHubSyncConfigFromEnv() (*gitHubSyncConfig, error) {
