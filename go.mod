@@ -137,5 +137,5 @@ require (
 	golang.org/x/text v0.35.0
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/protobuf v1.36.11
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 )
