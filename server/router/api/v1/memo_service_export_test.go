@@ -112,4 +112,43 @@ func TestExportMemos(t *testing.T) {
 	require.Contains(t, string(secondContent), "title: second memo for\n")
 	require.Contains(t, string(secondContent), "categories: daily\n")
 	require.Contains(t, string(secondContent), "- daily\n")
+
+	firstMetadata, err := service.getMemoExportMetadata(userCtx, firstMemo.Name)
+	require.NoError(t, err)
+	require.NotNil(t, firstMetadata.ExportTs)
+	require.GreaterOrEqual(t, *firstMetadata.ExportTs, firstCreateTime.Unix())
+
+	secondMetadata, err := service.getMemoExportMetadata(userCtx, secondMemo.Name)
+	require.NoError(t, err)
+	require.NotNil(t, secondMetadata.ExportTs)
+
+	updatedMemoTime := time.Date(2026, 3, 29, 10, 15, 0, 0, time.UTC)
+	_, err = service.UpdateMemo(userCtx, &apiv1.UpdateMemoRequest{
+		Memo: &apiv1.Memo{
+			Name:       firstMemo.Name,
+			Content:    "# Hello World\n\nThis memo is updated after export.\n\n#jekyll #golang",
+			UpdateTime: timestamppb.New(updatedMemoTime),
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"content", "update_time"}},
+	})
+	require.NoError(t, err)
+
+	exports, err := testStore.ListMemoExports(userCtx, &store.FindMemoExport{})
+	require.NoError(t, err)
+	require.Len(t, exports, 2)
+
+	firstMemoUID := strings.TrimPrefix(firstMemo.Name, "memos/")
+	firstStoreMemo, err := testStore.GetMemo(userCtx, &store.FindMemo{UID: &firstMemoUID})
+	require.NoError(t, err)
+	require.NotNil(t, firstStoreMemo)
+
+	var updatedExport *store.MemoExport
+	for _, item := range exports {
+		if item.MemoID == firstStoreMemo.ID {
+			updatedExport = item
+			break
+		}
+	}
+	require.NotNil(t, updatedExport)
+	require.Equal(t, updatedMemoTime.Unix(), updatedExport.UpdatedTs)
 }

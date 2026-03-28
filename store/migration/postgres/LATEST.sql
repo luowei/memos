@@ -109,3 +109,12 @@ CREATE TABLE memo_share (
 );
 
 CREATE INDEX idx_memo_share_memo_id ON memo_share(memo_id);
+
+-- memo_export
+CREATE TABLE memo_export (
+  memo_id INTEGER PRIMARY KEY,
+  export_ts BIGINT NOT NULL,
+  created_ts BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  updated_ts BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  FOREIGN KEY (memo_id) REFERENCES memo(id) ON DELETE CASCADE
+);

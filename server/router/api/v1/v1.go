@@ -118,7 +118,7 @@ func (s *APIV1Service) RegisterGateway(ctx context.Context, echoServer *echo.Ech
 	gwGroup.GET("/api/v1/sse", func(c *echo.Context) error {
 		return handleSSE(c, s.SSEHub, auth.NewAuthenticator(s.Store, s.Secret))
 	})
-	gwGroup.POST("/api/v1/memos:export", func(c *echo.Context) error {
+	gwGroup.POST("/api/v1/memos/export-markdown", func(c *echo.Context) error {
 		authHeader := c.Request().Header.Get("Authorization")
 		result := authenticator.Authenticate(c.Request().Context(), authHeader)
 		if result == nil {
@@ -150,7 +150,30 @@ func (s *APIV1Service) RegisterGateway(ctx context.Context, echoServer *echo.Ech
 		}
 		return c.JSON(http.StatusOK, response)
 	})
-	gwGroup.POST("/api/v1/memos:sync-attachments-to-lsky", func(c *echo.Context) error {
+	gwGroup.GET("/api/v1/memos/:memo/export-metadata", func(c *echo.Context) error {
+		authHeader := c.Request().Header.Get("Authorization")
+		result := authenticator.Authenticate(c.Request().Context(), authHeader)
+
+		ctx := c.Request().Context()
+		if result != nil {
+			ctx = auth.ApplyToContext(ctx, result)
+			c.SetRequest(c.Request().WithContext(ctx))
+		}
+
+		response, err := s.getMemoExportMetadata(ctx, MemoNamePrefix+c.Param("memo"))
+		if err != nil {
+			if st, ok := status.FromError(err); ok {
+				return c.JSON(runtime.HTTPStatusFromCode(st.Code()), map[string]string{
+					"message": st.Message(),
+				})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to get memo export metadata",
+			})
+		}
+		return c.JSON(http.StatusOK, response)
+	})
+	gwGroup.POST("/api/v1/memos/sync-attachments-to-lsky", func(c *echo.Context) error {
 		authHeader := c.Request().Header.Get("Authorization")
 		result := authenticator.Authenticate(c.Request().Context(), authHeader)
 		if result == nil {

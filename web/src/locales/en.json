@@ -161,6 +161,7 @@
     "direction-asc": "Ascending",
     "direction-desc": "Descending",
     "display-time": "Display Time",
+    "export-time": "export_time",
     "filters": {
       "has-code": "hasCode",
       "has-link": "hasLink",

@@ -65,6 +65,7 @@ func (s *APIV1Service) exportMemos(ctx context.Context, request *exportMemosRequ
 		return nil, status.Errorf(codes.Internal, "failed to list memos: %v", err)
 	}
 
+	exportTs := time.Now().Unix()
 	for _, memo := range memos {
 		filename, markdown, err := s.buildMemoExport(ctx, memo)
 		if err != nil {
@@ -73,6 +74,12 @@ func (s *APIV1Service) exportMemos(ctx context.Context, request *exportMemosRequ
 		fullpath := filepath.Join(outputDirectory, filename)
 		if err := os.WriteFile(fullpath, []byte(markdown), 0o644); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to write exported memo %s: %v", memo.UID, err)
+		}
+		if _, err := s.Store.UpsertMemoExport(ctx, &store.MemoExport{
+			MemoID:   memo.ID,
+			ExportTs: exportTs,
+		}); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to update export timestamp for memo %s: %v", memo.UID, err)
 		}
 	}
 

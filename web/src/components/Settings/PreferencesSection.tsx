@@ -119,7 +119,7 @@ const PreferencesSection = () => {
 
     setIsExporting(true);
     try {
-      const response = await fetch("/api/v1/memos:export", {
+      const response = await fetch("/api/v1/memos/export-markdown", {
         method: "POST",
         credentials: "include",
         headers: await getAuthorizedRequestHeaders(),
@@ -153,7 +153,7 @@ const PreferencesSection = () => {
 
     setIsSyncingLsky(true);
     try {
-      const response = await fetch("/api/v1/memos:sync-attachments-to-lsky", {
+      const response = await fetch("/api/v1/memos/sync-attachments-to-lsky", {
         method: "POST",
         credentials: "include",
         headers: await getAuthorizedRequestHeaders(),
@@ -234,7 +234,7 @@ const PreferencesSection = () => {
               placeholder={t("setting.preference.memo-export.path-placeholder")}
               className="w-full"
             />
-            <Button onClick={handleExportMemos} disabled={isExporting}>
+            <Button type="button" onClick={handleExportMemos} disabled={isExporting}>
               {isExporting ? t("setting.preference.memo-export.exporting") : t("setting.preference.memo-export.action")}
             </Button>
           </div>
@@ -284,7 +284,7 @@ const PreferencesSection = () => {
           vertical
         >
           <div className="w-full flex flex-col gap-3">
-            <Button onClick={handleSyncAttachmentsToLsky} disabled={isSyncingLsky} className="w-fit">
+            <Button type="button" onClick={handleSyncAttachmentsToLsky} disabled={isSyncingLsky} className="w-fit">
               {isSyncingLsky ? t("setting.preference.lsky-sync.syncing") : t("setting.preference.lsky-sync.action")}
             </Button>
             {lskySummary && (

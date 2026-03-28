@@ -155,5 +155,8 @@ func (s *Store) DeleteMemo(ctx context.Context, delete *DeleteMemo) error {
 			return err
 		}
 	}
+	if err := s.DeleteMemoExport(ctx, &DeleteMemoExport{MemoID: &delete.ID}); err != nil {
+		return err
+	}
 	return s.driver.DeleteMemo(ctx, delete)
 }

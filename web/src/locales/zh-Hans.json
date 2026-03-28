@@ -156,6 +156,7 @@
     "direction-asc": "正序",
     "direction-desc": "倒序",
     "display-time": "展示时间",
+    "export-time": "export_time",
     "filters": {
       "has-code": "有代码",
       "has-link": "有链接",

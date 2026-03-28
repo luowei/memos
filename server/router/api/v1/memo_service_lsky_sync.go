@@ -307,6 +307,9 @@ func (s *APIV1Service) appendLskyLinksToMemo(ctx context.Context, memo *store.Me
 	}); err != nil {
 		return errors.Wrap(err, "failed to update memo")
 	}
+	if err := s.syncMemoExportUpdatedTs(ctx, memo.ID, updatedTs); err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -3,6 +3,7 @@ import { BookmarkIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMemoExportMetadata } from "@/hooks/useMemoExportMetadata";
 import useNavigateTo from "@/hooks/useNavigateTo";
 import i18n from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const MemoHeader: React.FC<MemoHeaderProps> = ({ showCreator, showVisibility, sh
 
   const { memo, creator, currentUser, parentPage, isArchived, readonly, openEditor } = useMemoViewContext();
   const { relativeTimeFormat } = useMemoViewDerived();
+  const { data: exportMetadata } = useMemoExportMetadata(memo.name);
 
   const navigateTo = useNavigateTo();
   const handleGotoMemoDetailPage = useCallback(() => {
@@ -41,14 +43,21 @@ const MemoHeader: React.FC<MemoHeaderProps> = ({ showCreator, showVisibility, sh
       format={relativeTimeFormat}
     ></relative-time>
   );
+  const exportTime = exportMetadata?.exportTs ? new Date(exportMetadata.exportTs * 1000).toLocaleString(i18n.language) : undefined;
+  const displayTimeWithExportTime = (
+    <>
+      {displayTime}
+      {exportTime ? <span>{` · ${t("memo.export-time")}: ${exportTime}`}</span> : null}
+    </>
+  );
 
   return (
     <div className="w-full flex flex-row justify-between items-center gap-2">
       <div className="w-auto max-w-[calc(100%-8rem)] grow flex flex-row justify-start items-center">
         {showCreator && creator ? (
-          <CreatorDisplay creator={creator} displayTime={displayTime} onGotoDetail={handleGotoMemoDetailPage} />
+          <CreatorDisplay creator={creator} displayTime={displayTimeWithExportTime} onGotoDetail={handleGotoMemoDetailPage} />
         ) : (
-          <TimeDisplay displayTime={displayTime} onGotoDetail={handleGotoMemoDetailPage} />
+          <TimeDisplay displayTime={displayTimeWithExportTime} onGotoDetail={handleGotoMemoDetailPage} />
         )}
       </div>
 

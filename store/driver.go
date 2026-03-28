@@ -25,6 +25,12 @@ type Driver interface {
 	UpdateMemo(ctx context.Context, update *UpdateMemo) error
 	DeleteMemo(ctx context.Context, delete *DeleteMemo) error
 
+	// MemoExport model related methods.
+	UpsertMemoExport(ctx context.Context, memoExport *MemoExport) (*MemoExport, error)
+	ListMemoExports(ctx context.Context, find *FindMemoExport) ([]*MemoExport, error)
+	UpdateMemoExport(ctx context.Context, update *UpdateMemoExport) error
+	DeleteMemoExport(ctx context.Context, delete *DeleteMemoExport) error
+
 	// MemoRelation model related methods.
 	UpsertMemoRelation(ctx context.Context, create *MemoRelation) (*MemoRelation, error)
 	ListMemoRelations(ctx context.Context, find *FindMemoRelation) ([]*MemoRelation, error)
