@@ -318,7 +318,7 @@ func (s *APIV1Service) appendLskyLinksToMemo(ctx context.Context, memo *store.Me
 	return nil
 }
 
-func (_ *APIV1Service) uploadImageToLsky(ctx context.Context, baseURL, token, strategyID, filename string, blob []byte) (string, error) {
+func (*APIV1Service) uploadImageToLsky(ctx context.Context, baseURL, token, strategyID, filename string, blob []byte) (string, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
