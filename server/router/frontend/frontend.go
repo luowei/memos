@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 	"io/fs"
+	"path/filepath"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -30,13 +32,14 @@ func NewFrontendService(profile *profile.Profile, store *store.Store) *FrontendS
 
 func (*FrontendService) Serve(_ context.Context, e *echo.Echo) {
 	skipper := func(c *echo.Context) bool {
+		requestPath := c.Request().URL.Path
 		// Skip API routes.
-		if util.HasPrefixes(c.Path(), "/api", "/memos.api.v1") {
+		if util.HasPrefixes(requestPath, "/api", "/memos.api.v1") {
 			return true
 		}
-		// For index.html and root path, set no-cache headers to prevent browser caching
-		// This prevents sensitive data from being accessible via browser back button after logout
-		if c.Path() == "/" || c.Path() == "/index.html" {
+		// Any SPA route that ultimately resolves to index.html must not be cached,
+		// otherwise browsers/CDNs can keep stale HTML that references removed chunk filenames.
+		if shouldDisableFrontendCache(requestPath) {
 			c.Response().Header().Set(echo.HeaderCacheControl, "no-cache, no-store, must-revalidate")
 			c.Response().Header().Set("Pragma", "no-cache")
 			c.Response().Header().Set("Expires", "0")
@@ -57,6 +60,18 @@ func (*FrontendService) Serve(_ context.Context, e *echo.Echo) {
 		HTML5:      true, // Enable fallback to index.html
 		Skipper:    skipper,
 	}))
+}
+
+func shouldDisableFrontendCache(requestPath string) bool {
+	if requestPath == "" || requestPath == "/" {
+		return true
+	}
+
+	ext := strings.ToLower(filepath.Ext(requestPath))
+	if ext == "" || ext == ".html" {
+		return true
+	}
+	return false
 }
 
 func getFileSystem(path string) fs.FS {

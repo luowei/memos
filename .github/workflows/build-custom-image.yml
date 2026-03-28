@@ -18,55 +18,8 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/memos
 
 jobs:
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4.2.0
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('web/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        working-directory: web
-        run: pnpm install --frozen-lockfile
-
-      - name: Build frontend release assets
-        working-directory: web
-        run: pnpm release
-
-      - name: Upload frontend artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: server/router/frontend/dist
-          retention-days: 1
-
   build-push:
     name: Build And Push Multi-Arch Image
-    needs: build-frontend
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,12 +27,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-
-      - name: Download frontend artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: server/router/frontend/dist
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
