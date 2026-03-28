@@ -27,3 +27,11 @@ dist
 
 # Git worktrees
 .worktrees/
+
+# Local data and exports
+/data/
+/exports/
+/internal-doc/
+*.tar.gz
+/.local-data*/
+/.local-logs/

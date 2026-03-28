@@ -358,7 +358,36 @@
       "default-memo-sort-option": "Memo display time",
       "default-memo-visibility": "Default memo visibility",
       "label": "Preferences",
-      "theme": "Theme"
+      "theme": "Theme",
+      "memo-export": {
+        "action": "Export Markdown",
+        "description": "Export all of your memos to Jekyll-compatible Markdown files on the server.",
+        "exporting": "Exporting...",
+        "path-description": "Absolute paths are used directly. Relative paths are resolved from the server data directory.",
+        "path-label": "Output directory",
+        "path-placeholder": "/path/to/jekyll/_posts",
+        "path-required": "Output directory is required",
+        "success": "Exported {{count}} memos to {{path}}",
+        "title": "Memo export"
+      },
+      "lsky-sync": {
+        "action": "Sync attachments to Lsky",
+        "action-description": "Scans your memos, uploads image attachments to Lsky, converts PDFs to preview images when possible, and appends markdown image links to the end of each memo.",
+        "action-label": "Batch sync",
+        "base-url-label": "Lsky API URL",
+        "base-url-placeholder": "https://lsky.wodedata.com/api/v1",
+        "description": "Only memos with attachments are processed. If a memo contains unsupported attachments such as archives, the whole memo is skipped.",
+        "strategy-id-description": "Optional. Leave empty to use the default Lsky strategy.",
+        "strategy-id-label": "Strategy ID",
+        "strategy-id-placeholder": "Optional integer strategy id",
+        "success": "Lsky sync finished. Updated {{updated}} memos, skipped {{skipped}}, uploaded {{uploaded}} files",
+        "summary": "Scanned {{scanned}} memos, found attachments in {{attached}} memos, updated {{updated}}, skipped {{skipped}}, uploaded {{uploaded}} files",
+        "syncing": "Syncing...",
+        "title": "Lsky attachment sync",
+        "token-label": "Lsky token",
+        "token-placeholder": "Bearer token from Lsky",
+        "token-required": "Lsky token is required"
+      }
     },
     "shortcut": {
       "delete-confirm": "Are you sure you want to delete shortcut `{{title}}`?",

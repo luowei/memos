@@ -270,7 +270,36 @@
       "default-memo-sort-option": "备忘录显示时间",
       "default-memo-visibility": "默认备忘录可见性",
       "theme": "主题",
-      "label": "偏好设置"
+      "label": "偏好设置",
+      "memo-export": {
+        "action": "导出 Markdown",
+        "description": "将当前账号的全部 memo 导出为适合 Jekyll 的 Markdown 文件，写入服务器目录。",
+        "exporting": "导出中...",
+        "path-description": "绝对路径会直接使用；相对路径会基于服务器数据目录解析。",
+        "path-label": "导出目录",
+        "path-placeholder": "/path/to/jekyll/_posts",
+        "path-required": "请输入导出目录",
+        "success": "已导出 {{count}} 条 memo 到 {{path}}",
+        "title": "Memo 导出"
+      },
+      "lsky-sync": {
+        "action": "同步附件到兰空图床",
+        "action-description": "扫描你的 memo，把图片附件上传到兰空图床；若是 PDF，则尽量转成预览图上传；成功后把 Markdown 图片链接追加到 memo 末尾。",
+        "action-label": "批量同步",
+        "base-url-label": "兰空 API 地址",
+        "base-url-placeholder": "https://lsky.wodedata.com/api/v1",
+        "description": "只处理带附件的 memo。若某条 memo 含有压缩包等不支持的附件，则整条 memo 会被跳过。",
+        "strategy-id-description": "可选。留空则使用兰空默认策略。",
+        "strategy-id-label": "策略 ID",
+        "strategy-id-placeholder": "可选的整数策略 ID",
+        "success": "兰空同步完成：更新 {{updated}} 条 memo，跳过 {{skipped}} 条，上传 {{uploaded}} 个文件",
+        "summary": "共扫描 {{scanned}} 条 memo，其中 {{attached}} 条带附件，更新 {{updated}} 条，跳过 {{skipped}} 条，上传 {{uploaded}} 个文件",
+        "syncing": "同步中...",
+        "title": "兰空附件同步",
+        "token-label": "兰空 Token",
+        "token-placeholder": "输入兰空 Bearer Token",
+        "token-required": "请输入兰空 Token"
+      }
     },
     "shortcut": {
       "delete-confirm": "您确定要删除捷径 `{{title}}` 吗？",
