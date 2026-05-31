@@ -185,6 +185,17 @@ func (s *APIV1Service) buildSecondBrainSyncPostPayload(_ context.Context, memo *
 }
 
 func loadSecondBrainSyncConfig(ctx context.Context, service *APIV1Service) (*secondBrainSyncConfig, string, error) {
+	secondBrainSetting, err := readStoredSecondBrainSyncSetting(ctx, service)
+	if err != nil {
+		return nil, "", err
+	}
+	if secondBrainSetting != nil && (strings.TrimSpace(secondBrainSetting.BaseURL) != "" || strings.TrimSpace(secondBrainSetting.SharedSecret) != "") {
+		return &secondBrainSyncConfig{
+			BaseURL:      strings.TrimRight(firstNonEmpty(strings.TrimSpace(secondBrainSetting.BaseURL), getSecondBrainSyncBaseURLFromEnv(), defaultSecondBrainSyncBaseURL), "/"),
+			SharedSecret: strings.TrimSpace(firstNonEmpty(secondBrainSetting.SharedSecret, os.Getenv("MEMOS_SECOND_BRAIN_SYNC_SHARED_SECRET"))),
+		}, "stored", nil
+	}
+
 	stored, err := readStoredGitHubSyncSetting(ctx, service)
 	if err != nil {
 		return nil, "", err
