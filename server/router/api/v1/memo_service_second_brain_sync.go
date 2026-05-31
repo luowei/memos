@@ -218,7 +218,7 @@ func postSecondBrainSyncPayload(ctx context.Context, config *secondBrainSyncConf
 		return nil, errors.Wrap(err, "failed to create second brain sync request")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-admin-shared-secret", config.SharedSecret)
+	req.Header.Set("x-memos-sync-secret", config.SharedSecret)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
