@@ -1,7 +1,7 @@
 FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
 WORKDIR /frontend-build
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10 --activate
 
 COPY web/package.json web/pnpm-lock.yaml ./web/
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
