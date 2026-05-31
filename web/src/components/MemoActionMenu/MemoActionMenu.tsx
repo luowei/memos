@@ -6,7 +6,9 @@ import {
   CopyIcon,
   Edit3Icon,
   FileTextIcon,
+  GlobeIcon,
   LinkIcon,
+  LockIcon,
   MoreVerticalIcon,
   TrashIcon,
   UploadIcon,
@@ -23,6 +25,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useGitHubSyncSetting } from "@/hooks/useGitHubSyncSetting";
 import { State } from "@/types/proto/api/v1/common_pb";
 import { useTranslate } from "@/utils/i18n";
 import { useMemoActionHandlers } from "./hooks";
@@ -31,6 +34,7 @@ import type { MemoActionMenuProps } from "./types";
 const MemoActionMenu = (props: MemoActionMenuProps) => {
   const { memo, readonly } = props;
   const t = useTranslate();
+  const { data: gitHubSyncSetting } = useGitHubSyncSetting();
 
   // Dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -47,6 +51,7 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
     handleCopyLink,
     handleCopyContent,
     handleSyncToGitHubRepo,
+    handleSyncToSecondBrain,
     handleDeleteMemoClick,
     confirmDeleteMemo,
   } = useMemoActionHandlers({
@@ -76,11 +81,23 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
               <Edit3Icon className="w-4 h-auto" />
               {t("common.edit")}
             </DropdownMenuItem>
-            {!isComment && (
+            {!isComment && gitHubSyncSetting?.hideMemoAction === false && (
               <DropdownMenuItem onClick={handleSyncToGitHubRepo}>
                 <UploadIcon className="w-4 h-auto" />
                 {t("memo.sync-to-github-repo")}
               </DropdownMenuItem>
+            )}
+            {!isComment && (
+              <>
+                <DropdownMenuItem onClick={handleSyncToSecondBrain("public")}>
+                  <GlobeIcon className="w-4 h-auto" />
+                  {t("memo.sync-to-public-site")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSyncToSecondBrain("members")}>
+                  <LockIcon className="w-4 h-auto" />
+                  {t("memo.sync-to-members-site")}
+                </DropdownMenuItem>
+              </>
             )}
           </>
         )}

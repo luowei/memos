@@ -128,6 +128,42 @@ export const useMemoActionHandlers = ({ memo, onEdit, setDeleteDialogOpen }: Use
     }
   }, [memo.name, queryClient, t]);
 
+  const handleSyncToSecondBrain = useCallback(
+    (target: "public" | "members") => async () => {
+      try {
+        let accessToken = getAccessToken();
+        if ((!accessToken || isTokenExpired()) && hasStoredToken()) {
+          await refreshAccessToken();
+          accessToken = getAccessToken();
+        }
+
+        const memoUID = memo.name.replace(/^memos\//, "");
+        const response = await fetch(`/api/v1/memos/${encodeURIComponent(memoUID)}/sync-to-second-brain`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ target }),
+        });
+        if (!response.ok) {
+          const error = (await response.json().catch(() => null)) as { message?: string } | null;
+          throw new Error(error?.message || `Second Brain sync failed with status ${response.status}`);
+        }
+
+        queryClient.invalidateQueries({ queryKey: memoExportMetadataKeys.detail(memo.name) });
+        toast.success(target === "public" ? t("message.memo-synced-to-public-site") : t("message.memo-synced-to-members-site"));
+      } catch (error: unknown) {
+        handleError(error, toast.error, {
+          context: "Sync memo to second brain",
+          fallbackMessage: "An error occurred",
+        });
+      }
+    },
+    [memo.name, queryClient, t],
+  );
+
   const handleDeleteMemoClick = useCallback(() => {
     setDeleteDialogOpen(true);
   }, [setDeleteDialogOpen]);
@@ -156,6 +192,7 @@ export const useMemoActionHandlers = ({ memo, onEdit, setDeleteDialogOpen }: Use
     handleCopyLink,
     handleCopyContent,
     handleSyncToGitHubRepo,
+    handleSyncToSecondBrain,
     handleDeleteMemoClick,
     confirmDeleteMemo,
   };

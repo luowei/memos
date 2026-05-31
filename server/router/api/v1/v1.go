@@ -255,6 +255,38 @@ func (s *APIV1Service) RegisterGateway(ctx context.Context, echoServer *echo.Ech
 		}
 		return c.JSON(http.StatusOK, response)
 	})
+	gwGroup.POST("/api/v1/memos/:memo/sync-to-second-brain", func(c *echo.Context) error {
+		authHeader := c.Request().Header.Get("Authorization")
+		result := authenticator.Authenticate(c.Request().Context(), authHeader)
+		if result == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"message": "authentication required",
+			})
+		}
+
+		ctx := auth.ApplyToContext(c.Request().Context(), result)
+		c.SetRequest(c.Request().WithContext(ctx))
+
+		request := &syncMemoToSecondBrainRequest{}
+		if err := c.Bind(request); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"message": "invalid request body",
+			})
+		}
+
+		response, err := s.syncMemoToSecondBrain(ctx, MemoNamePrefix+c.Param("memo"), secondBrainSyncTarget(request.Target))
+		if err != nil {
+			if st, ok := status.FromError(err); ok {
+				return c.JSON(runtime.HTTPStatusFromCode(st.Code()), map[string]string{
+					"message": st.Message(),
+				})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to sync memo to second brain",
+			})
+		}
+		return c.JSON(http.StatusOK, response)
+	})
 	gwGroup.POST("/api/v1/memos/sync-attachments-to-lsky", func(c *echo.Context) error {
 		authHeader := c.Request().Header.Get("Authorization")
 		result := authenticator.Authenticate(c.Request().Context(), authHeader)

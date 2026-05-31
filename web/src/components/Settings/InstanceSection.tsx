@@ -1,16 +1,17 @@
 import { create } from "@bufbuild/protobuf";
+import { useQueryClient } from "@tanstack/react-query";
 import { isEqual } from "lodash-es";
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { getAccessToken, hasStoredToken, isTokenExpired } from "@/auth-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { identityProviderServiceClient, refreshAccessToken } from "@/connect";
+import { identityProviderServiceClient } from "@/connect";
 import { useInstance } from "@/contexts/InstanceContext";
 import useDialog from "@/hooks/useDialog";
+import { type GitHubSyncSetting, getAuthorizedJSONHeaders, gitHubSyncSettingKeys } from "@/hooks/useGitHubSyncSetting";
 import { handleError } from "@/lib/error";
 import { IdentityProvider } from "@/types/proto/api/v1/idp_service_pb";
 import {
@@ -25,17 +26,9 @@ import SettingGroup from "./SettingGroup";
 import SettingRow from "./SettingRow";
 import SettingSection from "./SettingSection";
 
-type GitHubSyncSetting = {
-  hasToken: boolean;
-  owner: string;
-  repo: string;
-  branch: string;
-  apiBaseUrl: string;
-  tokenHint?: string;
-};
-
 const InstanceSection = () => {
   const t = useTranslate();
+  const queryClient = useQueryClient();
   const customizeDialog = useDialog();
   const { generalSetting: originalSetting, profile, updateSetting, fetchSetting } = useInstance();
   const [instanceGeneralSetting, setInstanceGeneralSetting] = useState<InstanceSetting_GeneralSetting>(originalSetting);
@@ -46,9 +39,14 @@ const InstanceSection = () => {
     repo: "luowei_github_io_src",
     branch: "master",
     apiBaseUrl: "https://api.github.com",
+    hideMemoAction: true,
+    secondBrainBaseUrl: "https://wiki.markdev.work",
+    hasSecondBrainSharedSecret: false,
   });
   const [gitHubSyncToken, setGitHubSyncToken] = useState("");
   const [clearGitHubSyncToken, setClearGitHubSyncToken] = useState(false);
+  const [secondBrainSharedSecret, setSecondBrainSharedSecret] = useState("");
+  const [clearSecondBrainSharedSecret, setClearSecondBrainSharedSecret] = useState(false);
   const [isSavingGitHubSyncSetting, setIsSavingGitHubSyncSetting] = useState(false);
 
   useEffect(() => {
@@ -69,23 +67,10 @@ const InstanceSection = () => {
     fetchIdentityProviderList();
   }, []);
 
-  const getAuthorizedRequestHeaders = async () => {
-    let accessToken = getAccessToken();
-    if ((!accessToken || isTokenExpired()) && hasStoredToken()) {
-      await refreshAccessToken();
-      accessToken = getAccessToken();
-    }
-
-    return {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    };
-  };
-
   const fetchGitHubSyncSetting = async () => {
     const response = await fetch("/api/v1/integrations/github-sync", {
       credentials: "include",
-      headers: await getAuthorizedRequestHeaders(),
+      headers: await getAuthorizedJSONHeaders(),
     });
     if (!response.ok) {
       throw new Error(`Failed to fetch GitHub sync setting with status ${response.status}`);
@@ -94,6 +79,8 @@ const InstanceSection = () => {
     setGitHubSyncSetting(data);
     setGitHubSyncToken("");
     setClearGitHubSyncToken(false);
+    setSecondBrainSharedSecret("");
+    setClearSecondBrainSharedSecret(false);
   };
 
   useEffect(() => {
@@ -138,7 +125,7 @@ const InstanceSection = () => {
       const response = await fetch("/api/v1/integrations/github-sync", {
         method: "PUT",
         credentials: "include",
-        headers: await getAuthorizedRequestHeaders(),
+        headers: await getAuthorizedJSONHeaders(),
         body: JSON.stringify({
           token: gitHubSyncToken.trim(),
           owner: gitHubSyncSetting.owner.trim(),
@@ -146,6 +133,10 @@ const InstanceSection = () => {
           branch: gitHubSyncSetting.branch.trim(),
           apiBaseUrl: gitHubSyncSetting.apiBaseUrl.trim(),
           clearToken: clearGitHubSyncToken,
+          hideMemoAction: gitHubSyncSetting.hideMemoAction,
+          secondBrainBaseUrl: gitHubSyncSetting.secondBrainBaseUrl.trim(),
+          secondBrainSharedSecret: secondBrainSharedSecret.trim(),
+          clearSecondBrainSharedSecret,
         }),
       });
       if (!response.ok) {
@@ -156,6 +147,9 @@ const InstanceSection = () => {
       setGitHubSyncSetting(data);
       setGitHubSyncToken("");
       setClearGitHubSyncToken(false);
+      setSecondBrainSharedSecret("");
+      setClearSecondBrainSharedSecret(false);
+      queryClient.invalidateQueries({ queryKey: gitHubSyncSettingKeys.detail() });
       toast.success(t("message.update-succeed"));
     } catch (error: unknown) {
       await handleError(error, toast.error, {
@@ -249,6 +243,16 @@ const InstanceSection = () => {
       </SettingGroup>
 
       <SettingGroup title={t("setting.system.github-sync.title")} description={t("setting.system.github-sync.description")} showSeparator>
+        <SettingRow
+          label={t("setting.system.github-sync.hide-memo-action")}
+          description={t("setting.system.github-sync.hide-memo-action-description")}
+        >
+          <Switch
+            checked={gitHubSyncSetting.hideMemoAction}
+            onCheckedChange={(checked) => setGitHubSyncSetting((prev) => ({ ...prev, hideMemoAction: checked }))}
+          />
+        </SettingRow>
+
         <SettingRow label={t("setting.system.github-sync.owner")} vertical>
           <Input
             value={gitHubSyncSetting.owner}
@@ -307,6 +311,45 @@ const InstanceSection = () => {
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Switch checked={clearGitHubSyncToken} onCheckedChange={setClearGitHubSyncToken} />
                 <span>{t("setting.system.github-sync.clear-token")}</span>
+              </label>
+            )}
+          </div>
+        </SettingRow>
+
+        <SettingRow label={t("setting.system.github-sync.second-brain-base-url")} vertical>
+          <Input
+            value={gitHubSyncSetting.secondBrainBaseUrl}
+            onChange={(event) => setGitHubSyncSetting((prev) => ({ ...prev, secondBrainBaseUrl: event.target.value }))}
+            className="w-full"
+          />
+        </SettingRow>
+
+        <SettingRow
+          label={t("setting.system.github-sync.second-brain-shared-secret")}
+          description={
+            gitHubSyncSetting.hasSecondBrainSharedSecret
+              ? gitHubSyncSetting.secondBrainSharedSecretHint || t("setting.system.github-sync.second-brain-secret-configured")
+              : t("setting.system.github-sync.second-brain-secret-not-configured")
+          }
+          vertical
+        >
+          <div className="w-full flex flex-col gap-2">
+            <Input
+              type="password"
+              value={secondBrainSharedSecret}
+              onChange={(event) => {
+                setSecondBrainSharedSecret(event.target.value);
+                if (event.target.value) {
+                  setClearSecondBrainSharedSecret(false);
+                }
+              }}
+              placeholder={t("setting.system.github-sync.second-brain-secret-placeholder")}
+              className="w-full"
+            />
+            {gitHubSyncSetting.hasSecondBrainSharedSecret && (
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Switch checked={clearSecondBrainSharedSecret} onCheckedChange={setClearSecondBrainSharedSecret} />
+                <span>{t("setting.system.github-sync.clear-second-brain-secret")}</span>
               </label>
             )}
           </div>
