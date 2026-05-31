@@ -233,6 +233,7 @@
     "memo-synced-to-github": "Memo synced to GitHub repo",
     "memo-synced-to-members-site": "Memo synced to members site",
     "memo-synced-to-public-site": "Memo synced to public site",
+    "memo-synced-to-public-site-and-deploy-queued": "Memo synced to public site and public deploy was queued",
     "succeed-copy-content": "Content copied successfully.",
     "succeed-copy-link": "Link copied successfully.",
     "update-succeed": "Update succeeded",

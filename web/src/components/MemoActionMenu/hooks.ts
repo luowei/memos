@@ -151,9 +151,16 @@ export const useMemoActionHandlers = ({ memo, onEdit, setDeleteDialogOpen }: Use
           const error = (await response.json().catch(() => null)) as { message?: string } | null;
           throw new Error(error?.message || `Second Brain sync failed with status ${response.status}`);
         }
+        const result = (await response.json().catch(() => null)) as { publicSiteDeploy?: { queued?: boolean } } | null;
 
         queryClient.invalidateQueries({ queryKey: memoExportMetadataKeys.detail(memo.name) });
-        toast.success(target === "public" ? t("message.memo-synced-to-public-site") : t("message.memo-synced-to-members-site"));
+        toast.success(
+          target === "public"
+            ? result?.publicSiteDeploy?.queued
+              ? t("message.memo-synced-to-public-site-and-deploy-queued")
+              : t("message.memo-synced-to-public-site")
+            : t("message.memo-synced-to-members-site"),
+        );
       } catch (error: unknown) {
         handleError(error, toast.error, {
           context: "Sync memo to second brain",

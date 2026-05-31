@@ -201,6 +201,7 @@
     "memo-synced-to-github": "已同步到 GitHub 仓库",
     "memo-synced-to-members-site": "已同步到成员站",
     "memo-synced-to-public-site": "已同步到公开站",
+    "memo-synced-to-public-site-and-deploy-queued": "已同步到公开站，并已触发公开站发布",
     "succeed-copy-content": "复制内容到剪贴板成功。",
     "succeed-copy-link": "复制链接到剪贴板成功。",
     "update-succeed": "更新成功",

@@ -36,10 +36,16 @@ type syncMemoToSecondBrainRequest struct {
 }
 
 type syncMemoToSecondBrainResponse struct {
-	MemoID     string `json:"memoId"`
-	Slug       string `json:"slug,omitempty"`
-	Visibility string `json:"visibility,omitempty"`
-	URL        string `json:"url,omitempty"`
+	MemoID           string `json:"memoId"`
+	Slug             string `json:"slug,omitempty"`
+	Visibility       string `json:"visibility,omitempty"`
+	URL              string `json:"url,omitempty"`
+	PublicSiteDeploy *struct {
+		Queued   bool   `json:"queued,omitempty"`
+		Workflow string `json:"workflow,omitempty"`
+		Skipped  bool   `json:"skipped,omitempty"`
+		Reason   string `json:"reason,omitempty"`
+	} `json:"publicSiteDeploy,omitempty"`
 }
 
 type secondBrainSyncConfig struct {
@@ -63,9 +69,15 @@ type secondBrainSyncPostPayload struct {
 type secondBrainSyncAPIResponse struct {
 	OK   bool `json:"ok"`
 	Data struct {
-		MemoID     string `json:"memo_id"`
-		Slug       string `json:"slug"`
-		Visibility string `json:"visibility"`
+		MemoID           string `json:"memo_id"`
+		Slug             string `json:"slug"`
+		Visibility       string `json:"visibility"`
+		PublicSiteDeploy *struct {
+			Queued   bool   `json:"queued,omitempty"`
+			Workflow string `json:"workflow,omitempty"`
+			Skipped  bool   `json:"skipped,omitempty"`
+			Reason   string `json:"reason,omitempty"`
+		} `json:"public_site_deploy,omitempty"`
 	} `json:"data"`
 	Error *struct {
 		Code    string `json:"code"`
@@ -133,10 +145,11 @@ func (s *APIV1Service) syncMemoToSecondBrain(ctx context.Context, memoName strin
 
 	slug := firstNonEmpty(apiResponse.Data.Slug, payload.Slug)
 	return &syncMemoToSecondBrainResponse{
-		MemoID:     firstNonEmpty(apiResponse.Data.MemoID, payload.MemoID),
-		Slug:       slug,
-		Visibility: firstNonEmpty(apiResponse.Data.Visibility, payload.Target),
-		URL:        strings.TrimRight(config.BaseURL, "/") + "/posts/" + slug,
+		MemoID:           firstNonEmpty(apiResponse.Data.MemoID, payload.MemoID),
+		Slug:             slug,
+		Visibility:       firstNonEmpty(apiResponse.Data.Visibility, payload.Target),
+		URL:              strings.TrimRight(config.BaseURL, "/") + "/posts/" + slug,
+		PublicSiteDeploy: apiResponse.Data.PublicSiteDeploy,
 	}, nil
 }
 
